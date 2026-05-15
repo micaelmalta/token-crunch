@@ -35,7 +35,9 @@ func readHooks(t *testing.T, path string) hooksSection {
 	}
 	var hooks hooksSection
 	if raw, ok := top["hooks"]; ok {
-		json.Unmarshal(raw, &hooks)
+		if err := json.Unmarshal(raw, &hooks); err != nil {
+			t.Fatalf("parse hooks: %v", err)
+		}
 	}
 	return hooks
 }
@@ -120,7 +122,9 @@ func TestInstall_preservesExistingHooks(t *testing.T) {
 	// Non-hooks fields must survive
 	data, _ := os.ReadFile(path)
 	var top map[string]json.RawMessage
-	json.Unmarshal(data, &top)
+	if err := json.Unmarshal(data, &top); err != nil {
+		t.Fatalf("parse settings after install: %v", err)
+	}
 	if _, ok := top["model"]; !ok {
 		t.Error("existing non-hooks fields must be preserved")
 	}
@@ -129,7 +133,9 @@ func TestInstall_preservesExistingHooks(t *testing.T) {
 func TestUninstall_removesHooks(t *testing.T) {
 	path := settingsFile(t, "")
 
-	Install(false)
+	if err := Install(false); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
 	if err := Uninstall(false); err != nil {
 		t.Fatalf("Uninstall: %v", err)
 	}
@@ -176,7 +182,9 @@ func TestUninstall_missingFile(t *testing.T) {
 
 func TestInstall_atomicWrite(t *testing.T) {
 	path := settingsFile(t, "")
-	Install(false)
+	if err := Install(false); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
 	// .tmp must not linger
 	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
 		t.Fatal(".tmp file must be cleaned up after install")
@@ -189,7 +197,7 @@ func TestInstall_local_writesProjectSettings(t *testing.T) {
 
 	dir := t.TempDir()
 	orig, _ := os.Getwd()
-	defer os.Chdir(orig)
+	t.Cleanup(func() { _ = os.Chdir(orig) })
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
@@ -220,7 +228,7 @@ func TestInstall_local_writesProjectSettings(t *testing.T) {
 func TestUninstall_local_removesProjectSettings(t *testing.T) {
 	dir := t.TempDir()
 	orig, _ := os.Getwd()
-	defer os.Chdir(orig)
+	t.Cleanup(func() { _ = os.Chdir(orig) })
 	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}

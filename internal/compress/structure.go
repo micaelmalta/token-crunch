@@ -338,7 +338,7 @@ func packageLogEcosystem(lower string) string {
 func tryMarkup(content string) (string, bool) {
 	trimmed := strings.TrimSpace(content)
 	lower := strings.ToLower(trimmed)
-	if !(strings.HasPrefix(lower, "<") && (strings.Contains(lower, "</") || strings.Contains(lower, "/>"))) {
+	if !strings.HasPrefix(lower, "<") || (!strings.Contains(lower, "</") && !strings.Contains(lower, "/>")) {
 		return "", false
 	}
 	tagRe := regexp.MustCompile(`<\s*([a-zA-Z0-9:_-]+)`)

@@ -170,7 +170,7 @@ func containsAny(line string, terms map[string]bool) bool {
 func tokeniseWords(s string) []string {
 	s = strings.ToLower(s)
 	return strings.FieldsFunc(s, func(r rune) bool {
-		return !('a' <= r && r <= 'z') && !('0' <= r && r <= '9') && r != '_'
+		return ('a' > r || r > 'z') && ('0' > r || r > '9') && r != '_'
 	})
 }
 
@@ -186,12 +186,13 @@ func estimateTokens(s string) int {
 func indent(line string) int {
 	n := 0
 	for _, c := range line {
-		if c == ' ' {
+		switch c {
+		case ' ':
 			n++
-		} else if c == '\t' {
+		case '\t':
 			n += 2
-		} else {
-			break
+		default:
+			return n
 		}
 	}
 	return n
