@@ -1,0 +1,10 @@
+{
+  "session_id": "golden-post-unknown",
+  "tool_name": "GenericTool",
+  "tool_input": {
+    "query": "users"
+  },
+  "tool_response": {
+    "output": "[\n  {\"id\": 1, \"name\": \"alpha\"},\n  {\"id\": 2, \"name\": \"beta\"},\n  {\"id\": 3, \"name\": \"gamma\"},\n  {\"id\": 4, \"name\": \"delta\"}\n]"
+  }
+}

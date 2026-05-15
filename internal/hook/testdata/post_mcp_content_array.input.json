@@ -1,0 +1,20 @@
+{
+  "session_id": "golden-post-mcp",
+  "tool_name": "mcp__demo__users",
+  "tool_input": {
+    "resource": "users"
+  },
+  "tool_response": {
+    "content": [
+      {
+        "type": "image",
+        "source": "screenshot.png"
+      },
+      {
+        "type": "text",
+        "text": "[\n  {\"id\": 1, \"name\": \"alpha\"},\n  {\"id\": 2, \"name\": \"beta\"},\n  {\"id\": 3, \"name\": \"gamma\"},\n  {\"id\": 4, \"name\": \"delta\"}\n]"
+      }
+    ],
+    "isError": false
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "session_id": "golden-pre-cache",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "users.json"
+  }
+}

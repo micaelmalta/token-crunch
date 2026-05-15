@@ -1,0 +1,10 @@
+{
+  "session_id": "golden-post-text",
+  "tool_name": "Notebook",
+  "tool_input": {
+    "query": "users"
+  },
+  "tool_response": {
+    "text": "[\n  {\"id\": 1, \"name\": \"alpha\"},\n  {\"id\": 2, \"name\": \"beta\"},\n  {\"id\": 3, \"name\": \"gamma\"},\n  {\"id\": 4, \"name\": \"delta\"}\n]"
+  }
+}

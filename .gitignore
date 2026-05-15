@@ -1,0 +1,28 @@
+# OS/editor noise
+.DS_Store
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Go build/test artifacts
+bin/
+dist/
+build/
+*.test
+*.out
+coverage.out
+
+# Local binaries and release outputs
+./token-crunch
+token-crunch-*
+
+# Local hook captures and replay scratch files
+captures/
+*.jsonl
+*.log
+
+# Temporary/debug files
+*.tmp
+*.bak

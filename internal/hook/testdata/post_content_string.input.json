@@ -1,0 +1,10 @@
+{
+  "session_id": "golden-post-content",
+  "tool_name": "Read",
+  "tool_input": {
+    "file_path": "users.json"
+  },
+  "tool_response": {
+    "content": "[\n  {\"id\": 1, \"name\": \"alpha\"},\n  {\"id\": 2, \"name\": \"beta\"},\n  {\"id\": 3, \"name\": \"gamma\"},\n  {\"id\": 4, \"name\": \"delta\"}\n]"
+  }
+}

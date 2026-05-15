@@ -1,0 +1,18 @@
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PostToolUse",
+    "updatedToolOutput": {
+      "content": [
+        {
+          "type": "image",
+          "source": "screenshot.png"
+        },
+        {
+          "type": "text",
+          "text": "[token-crunch: 24 → 16 tokens | structure]\n{\"id\": 1, \"name\": \"alpha\"},\n{\"id\": 2, \"name\": \"beta\"},\n…and 2 more items"
+        }
+      ],
+      "isError": false
+    }
+  }
+}
