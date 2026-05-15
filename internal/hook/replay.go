@@ -79,7 +79,7 @@ func collectReplay(logPath string) (ReplayReport, error) {
 	if err != nil {
 		return ReplayReport{}, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	store := newEphemeralStore()
 

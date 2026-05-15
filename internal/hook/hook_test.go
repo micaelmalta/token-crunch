@@ -492,10 +492,14 @@ func runFlush(t *testing.T, inputJSON string) error {
 	if _, err := w.WriteString(inputJSON); err != nil {
 		t.Fatalf("write: %v", err)
 	}
-	w.Close()
+	if err := w.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
 	flushErr := Flush()
 	os.Stdin = origStdin
-	r.Close()
+	if err := r.Close(); err != nil {
+		t.Fatalf("close reader: %v", err)
+	}
 	return flushErr
 }
 
@@ -642,8 +646,13 @@ func TestReplay_dedupsAcrossTurns(t *testing.T) {
 }
 
 func TestReplay_emptyLog(t *testing.T) {
-	f, _ := os.CreateTemp(t.TempDir(), "replay-*.log")
-	f.Close()
+	f, err := os.CreateTemp(t.TempDir(), "replay-*.log")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
 	if err := Replay(f.Name()); err != nil {
 		t.Fatalf("empty log must not error: %v", err)
 	}

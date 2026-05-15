@@ -209,8 +209,8 @@ func isError(raw json.RawMessage) bool {
 	if stderr, ok := m["stderr"]; ok {
 		if stdout, ok2 := m["stdout"]; ok2 {
 			var out, err string
-			json.Unmarshal(stdout, &out)
-			json.Unmarshal(stderr, &err)
+			_ = json.Unmarshal(stdout, &out)
+			_ = json.Unmarshal(stderr, &err)
 			if err != "" && out == "" {
 				return true
 			}
