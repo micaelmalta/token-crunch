@@ -21,7 +21,9 @@ func captureStdout(t *testing.T, f func()) string {
 	orig := os.Stdout
 	os.Stdout = w
 	f()
-	w.Close()
+	if err := w.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
 	os.Stdout = orig
 
 	var sb strings.Builder
@@ -33,7 +35,9 @@ func captureStdout(t *testing.T, f func()) string {
 		}
 		sb.Write(buf[:n])
 	}
-	r.Close()
+	if err := r.Close(); err != nil {
+		t.Fatalf("close reader: %v", err)
+	}
 	return sb.String()
 }
 
@@ -242,9 +246,13 @@ func TestStats_skipsTmpFiles(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", dir)
 
 	storeDir := filepath.Join(dir, "token-crunch")
-	os.MkdirAll(storeDir, 0o755)
+	if err := os.MkdirAll(storeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	// Write a lingering .tmp file — must be ignored
-	os.WriteFile(filepath.Join(storeDir, "session-x.json.tmp"), []byte(`{}`), 0o644)
+	if err := os.WriteFile(filepath.Join(storeDir, "session-x.json.tmp"), []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	out := captureStdout(t, func() {
 		if err := Stats(); err != nil {
@@ -261,8 +269,12 @@ func TestStats_skipsMalformedJSON(t *testing.T) {
 	t.Setenv("XDG_DATA_HOME", dir)
 
 	storeDir := filepath.Join(dir, "token-crunch")
-	os.MkdirAll(storeDir, 0o755)
-	os.WriteFile(filepath.Join(storeDir, "session-bad.json"), []byte(`not json`), 0o644)
+	if err := os.MkdirAll(storeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(storeDir, "session-bad.json"), []byte(`not json`), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	// Malformed file is silently skipped
 	out := captureStdout(t, func() {

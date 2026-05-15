@@ -169,14 +169,20 @@ func runPost(t *testing.T, _ *session.Store, inputJSON string) string {
 	if _, err := sw.WriteString(inputJSON); err != nil {
 		t.Fatalf("write stdin: %v", err)
 	}
-	sw.Close()
+	if err := sw.Close(); err != nil {
+		t.Fatalf("close stdin writer: %v", err)
+	}
 
 	postErr := Post()
 
-	w.Close()
+	if err := w.Close(); err != nil {
+		t.Fatalf("close stdout writer: %v", err)
+	}
 	os.Stdout = origStdout
 	os.Stdin = origStdin
-	sr.Close()
+	if err := sr.Close(); err != nil {
+		t.Fatalf("close stdin reader: %v", err)
+	}
 
 	if postErr != nil {
 		t.Fatalf("Post() error: %v", postErr)
@@ -191,7 +197,9 @@ func runPost(t *testing.T, _ *session.Store, inputJSON string) string {
 		}
 		sb.Write(buf[:n])
 	}
-	r.Close()
+	if err := r.Close(); err != nil {
+		t.Fatalf("close stdout reader: %v", err)
+	}
 	return sb.String()
 }
 
@@ -420,7 +428,9 @@ func captureHookStdout(t *testing.T, f func()) string {
 	}
 	os.Stdout = w
 	f()
-	w.Close()
+	if err := w.Close(); err != nil {
+		t.Fatalf("close writer: %v", err)
+	}
 	os.Stdout = orig
 
 	var sb strings.Builder
@@ -432,7 +442,9 @@ func captureHookStdout(t *testing.T, f func()) string {
 		}
 		sb.Write(buf[:n])
 	}
-	r.Close()
+	if err := r.Close(); err != nil {
+		t.Fatalf("close reader: %v", err)
+	}
 	return sb.String()
 }
 
@@ -516,10 +528,16 @@ func writeReplayLog(t *testing.T, entries []ReplayEntry) string {
 	}
 	for _, e := range entries {
 		b, _ := json.Marshal(e)
-		f.Write(b)
-		f.WriteString("\n")
+		if _, err := f.Write(b); err != nil {
+			t.Fatalf("write replay entry: %v", err)
+		}
+		if _, err := f.WriteString("\n"); err != nil {
+			t.Fatalf("write newline: %v", err)
+		}
 	}
-	f.Close()
+	if err := f.Close(); err != nil {
+		t.Fatalf("close replay log: %v", err)
+	}
 	return f.Name()
 }
 
@@ -551,14 +569,27 @@ func TestReplayJSON(t *testing.T) {
 }
 
 func TestReplay_skipsComments(t *testing.T) {
-	f, _ := os.CreateTemp(t.TempDir(), "replay-*.log")
-	f.WriteString("# this is a comment\n")
-	f.WriteString("\n")
+	f, err := os.CreateTemp(t.TempDir(), "replay-*.log")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("# this is a comment\n"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("\n"); err != nil {
+		t.Fatal(err)
+	}
 	entry := ReplayEntry{ToolName: "Bash", Content: "output"}
 	b, _ := json.Marshal(entry)
-	f.Write(b)
-	f.WriteString("\n")
-	f.Close()
+	if _, err := f.Write(b); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := Replay(f.Name()); err != nil {
 		t.Fatalf("Replay with comments: %v", err)
@@ -566,13 +597,24 @@ func TestReplay_skipsComments(t *testing.T) {
 }
 
 func TestReplay_skipsMalformedLines(t *testing.T) {
-	f, _ := os.CreateTemp(t.TempDir(), "replay-*.log")
-	f.WriteString("not json at all\n")
+	f, err := os.CreateTemp(t.TempDir(), "replay-*.log")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("not json at all\n"); err != nil {
+		t.Fatal(err)
+	}
 	entry := ReplayEntry{ToolName: "Read", Content: "valid content"}
 	b, _ := json.Marshal(entry)
-	f.Write(b)
-	f.WriteString("\n")
-	f.Close()
+	if _, err := f.Write(b); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
 
 	// Should not error — malformed lines are skipped with a stderr warning
 	if err := Replay(f.Name()); err != nil {
@@ -700,7 +742,9 @@ func TestPre_cacheHit_returnsStoredContent(t *testing.T) {
 	}
 
 	var env map[string]any
-	json.Unmarshal(buf.Bytes(), &env)
+	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
+		t.Fatalf("unmarshal pre output: %v", err)
+	}
 	hso := env["hookSpecificOutput"].(map[string]any)
 	ctx := hso["additionalContext"].(string)
 	if ctx != cachedContent {

@@ -111,10 +111,6 @@ func RunWithConfig(store *session.Store, toolName string, toolInput map[string]a
 	}
 }
 
-func looksLikeError(content string) bool {
-	return looksLikeErrorWithKeywords(content, nil)
-}
-
 func looksLikeErrorWithKeywords(content string, keywords []string) bool {
 	lower := strings.ToLower(content)
 	if len(keywords) == 0 {
