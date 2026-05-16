@@ -31,7 +31,7 @@ func Flush() error {
 	session.Init(inp.SessionID)
 	store := session.Global()
 	store.IncrementTurn()
-	if inp.ContextWindow != nil && inp.ContextWindow.UsedPercentage > 0 {
+	if inp.ContextWindow != nil {
 		store.SetContextUsedPct(inp.ContextWindow.UsedPercentage)
 		debugf("flush context_window_used=%.1f%%", inp.ContextWindow.UsedPercentage)
 	}

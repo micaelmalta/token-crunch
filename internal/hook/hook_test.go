@@ -552,19 +552,20 @@ func TestFlush_resetsCompactRequested(t *testing.T) {
 	}
 }
 
-func TestFlush_zeroContextWindowIgnored(t *testing.T) {
+func TestFlush_zeroContextWindowOverwritesPrevious(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", dir)
 	session.Init("flush-zero-ctx")
 	store := session.Global()
 	store.SetContextUsedPct(50.0)
 
-	// payload with 0 must not overwrite an existing non-zero value
+	// payload with 0 must overwrite an existing non-zero value when the object is present —
+	// this handles post-compaction reset and prevents the nudge from firing indefinitely
 	if err := runFlush(t, `{"session_id":"flush-zero-ctx","context_window":{"used_percentage":0}}`); err != nil {
 		t.Fatalf("Flush: %v", err)
 	}
-	if store.ContextUsedPct() != 50.0 {
-		t.Fatalf("zero context_window must not overwrite existing value, got %f", store.ContextUsedPct())
+	if store.ContextUsedPct() != 0.0 {
+		t.Fatalf("zero context_window must overwrite existing value, got %f", store.ContextUsedPct())
 	}
 }
 
