@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/micaelmalta/token-crunch/internal/config"
 	"github.com/micaelmalta/token-crunch/internal/session"
 )
 
@@ -520,6 +521,191 @@ func TestFlush_emptyInput(t *testing.T) {
 	if err := runFlush(t, `{}`); err != nil {
 		t.Fatalf("Flush with empty input: %v", err)
 	}
+}
+
+func TestFlush_storesContextUsedPct(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", dir)
+	session.Init("flush-ctx-pct")
+	store := session.Global()
+
+	if err := runFlush(t, `{"session_id":"flush-ctx-pct","context_window":{"used_percentage":82.5}}`); err != nil {
+		t.Fatalf("Flush: %v", err)
+	}
+	if got := store.ContextUsedPct(); got != 82.5 {
+		t.Fatalf("want context_used_pct=82.5, got %f", got)
+	}
+}
+
+func TestFlush_resetsCompactRequested(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", dir)
+	session.Init("flush-reset-compact")
+	store := session.Global()
+	store.SetCompactRequested(true)
+
+	if err := runFlush(t, `{"session_id":"flush-reset-compact"}`); err != nil {
+		t.Fatalf("Flush: %v", err)
+	}
+	if store.CompactRequested() {
+		t.Fatal("Flush must reset compact_requested to false")
+	}
+}
+
+func TestFlush_zeroContextWindowIgnored(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_DATA_HOME", dir)
+	session.Init("flush-zero-ctx")
+	store := session.Global()
+	store.SetContextUsedPct(50.0)
+
+	// payload with 0 must not overwrite an existing non-zero value
+	if err := runFlush(t, `{"session_id":"flush-zero-ctx","context_window":{"used_percentage":0}}`); err != nil {
+		t.Fatalf("Flush: %v", err)
+	}
+	if store.ContextUsedPct() != 50.0 {
+		t.Fatalf("zero context_window must not overwrite existing value, got %f", store.ContextUsedPct())
+	}
+}
+
+// ── compactContext ────────────────────────────────────────────────────────────
+
+func TestCompactContext_belowThreshold(t *testing.T) {
+	store := session.NewEphemeral()
+	store.SetContextUsedPct(60.0)
+	cfg := cfgWithThreshold(80)
+	if got := compactContext(store, cfg); got != "" {
+		t.Fatalf("below threshold must return empty, got %q", got)
+	}
+}
+
+func TestCompactContext_atThreshold(t *testing.T) {
+	store := session.NewEphemeral()
+	store.SetContextUsedPct(80.0)
+	cfg := cfgWithThreshold(80)
+	got := compactContext(store, cfg)
+	if got == "" {
+		t.Fatal("at threshold must return nudge")
+	}
+	if !strings.Contains(got, "auto-compact") {
+		t.Fatalf("nudge must contain 'auto-compact', got: %q", got)
+	}
+	if !strings.Contains(got, "summary") {
+		t.Fatalf("nudge must contain the compact message, got: %q", got)
+	}
+}
+
+func TestCompactContext_aboveThreshold(t *testing.T) {
+	store := session.NewEphemeral()
+	store.SetContextUsedPct(95.0)
+	cfg := cfgWithThreshold(75)
+	if got := compactContext(store, cfg); got == "" {
+		t.Fatal("above threshold must return nudge")
+	}
+}
+
+func TestCompactContext_disabledWhenThresholdZero(t *testing.T) {
+	store := session.NewEphemeral()
+	store.SetContextUsedPct(99.0)
+	cfg := cfgWithThreshold(0)
+	if got := compactContext(store, cfg); got != "" {
+		t.Fatalf("threshold=0 must disable compaction, got %q", got)
+	}
+}
+
+func TestCompactContext_idempotent(t *testing.T) {
+	store := session.NewEphemeral()
+	store.SetContextUsedPct(90.0)
+	cfg := cfgWithThreshold(75)
+
+	first := compactContext(store, cfg)
+	if first == "" {
+		t.Fatal("first call must return nudge")
+	}
+	second := compactContext(store, cfg)
+	if second != "" {
+		t.Fatal("second call in same turn must return empty (already requested)")
+	}
+}
+
+func TestCompactContext_customMessage(t *testing.T) {
+	store := session.NewEphemeral()
+	store.SetContextUsedPct(90.0)
+	cfg := cfgWithThreshold(75)
+	cfg.CompactMessage = "custom compact prompt"
+
+	got := compactContext(store, cfg)
+	if !strings.Contains(got, "custom compact prompt") {
+		t.Fatalf("custom message not injected, got: %q", got)
+	}
+}
+
+func TestCompactContext_setsCompactRequested(t *testing.T) {
+	store := session.NewEphemeral()
+	store.SetContextUsedPct(90.0)
+	cfg := cfgWithThreshold(75)
+
+	compactContext(store, cfg)
+	if !store.CompactRequested() {
+		t.Fatal("compactContext must set CompactRequested=true")
+	}
+}
+
+func TestPre_injectsCompactNudge(t *testing.T) {
+	store := session.NewEphemeral()
+	store.SetContextUsedPct(90.0)
+	t.Setenv("TOKEN_CRUNCH_COMPACT_THRESHOLD", "75")
+
+	inp := preInput{ToolName: "Bash", ToolInput: map[string]any{"command": "git status"}}
+	var buf bytes.Buffer
+	if err := preWithStore(store, inp, &buf); err != nil {
+		t.Fatalf("preWithStore: %v", err)
+	}
+	if buf.Len() == 0 {
+		t.Fatal("cache miss + compact triggered must still produce output")
+	}
+	var env map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
+		t.Fatalf("output must be valid JSON: %v\ngot: %s", err, buf.String())
+	}
+	hso := env["hookSpecificOutput"].(map[string]any)
+	ctx, _ := hso["additionalContext"].(string)
+	if !strings.Contains(ctx, "auto-compact") {
+		t.Fatalf("additionalContext must contain compact nudge, got: %q", ctx)
+	}
+}
+
+func TestPre_compactNudgePrependedToCacheHit(t *testing.T) {
+	store := session.NewEphemeral()
+	store.SetContextUsedPct(90.0)
+	t.Setenv("TOKEN_CRUNCH_COMPACT_THRESHOLD", "75")
+
+	inp := preInput{ToolName: "Read", ToolInput: map[string]any{"file_path": "main.go"}}
+	cacheKey := buildCacheKey(inp.ToolName, inp.ToolInput)
+	store.PutToolCache(cacheKey, inp.ToolName, "cached file content", 19)
+
+	var buf bytes.Buffer
+	if err := preWithStore(store, inp, &buf); err != nil {
+		t.Fatalf("preWithStore: %v", err)
+	}
+	var env map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &env); err != nil {
+		t.Fatalf("output must be valid JSON: %v", err)
+	}
+	hso := env["hookSpecificOutput"].(map[string]any)
+	ctx, _ := hso["additionalContext"].(string)
+	if !strings.Contains(ctx, "auto-compact") {
+		t.Fatalf("compact nudge must be prepended to cache hit context, got: %q", ctx)
+	}
+	if !strings.Contains(ctx, "cached file content") {
+		t.Fatalf("cache hit content must still be present, got: %q", ctx)
+	}
+}
+
+func cfgWithThreshold(pct float64) config.Config {
+	cfg := config.Load()
+	cfg.CompactThreshold = pct
+	return cfg
 }
 
 // ── Replay ───────────────────────────────────────────────────────────────────

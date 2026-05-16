@@ -162,6 +162,8 @@ Runtime behavior can be tuned with environment variables:
 | `TOKEN_CRUNCH_DENYLIST` | empty | Comma-separated tool/input substrings that disable raw storage |
 | `TOKEN_CRUNCH_CAPTURE_DIR` | empty | Optional directory for raw hook payload capture fixtures |
 | `TOKEN_CRUNCH_DEBUG` | `false` | Emit hook decision logs to stderr |
+| `TOKEN_CRUNCH_COMPACT_THRESHOLD` | `75` | Context window used-percentage (0–100) that triggers auto-compaction nudge (0 = disabled). Works with any window size — 200k, 1M, etc. |
+| `TOKEN_CRUNCH_COMPACT_MESSAGE` | built-in | Override the compaction prompt injected via `additionalContext` |
 
 Use `token-crunch explain <payload.json>` to see which strategies were considered, which applied, and the final output that would be sent back through the hook.
 

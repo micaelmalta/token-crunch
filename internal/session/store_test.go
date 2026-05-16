@@ -199,3 +199,52 @@ func TestStore_flushAtomic(t *testing.T) {
 		t.Fatal("tmp file should not remain after flush")
 	}
 }
+
+func TestStore_contextUsedPct(t *testing.T) {
+	s := NewEphemeral()
+	if s.ContextUsedPct() != 0 {
+		t.Fatal("initial context used pct must be 0")
+	}
+	s.SetContextUsedPct(82.5)
+	if s.ContextUsedPct() != 82.5 {
+		t.Fatalf("want 82.5, got %f", s.ContextUsedPct())
+	}
+}
+
+func TestStore_compactRequested(t *testing.T) {
+	s := NewEphemeral()
+	if s.CompactRequested() {
+		t.Fatal("initial compact requested must be false")
+	}
+	s.SetCompactRequested(true)
+	if !s.CompactRequested() {
+		t.Fatal("want true after SetCompactRequested(true)")
+	}
+	s.SetCompactRequested(false)
+	if s.CompactRequested() {
+		t.Fatal("want false after SetCompactRequested(false)")
+	}
+}
+
+func TestStore_flushAndLoadContextUsedPct(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "session-ctx.json")
+
+	s := &Store{entries: make(map[string]*Entry), toolCache: make(map[string]*Entry), path: path}
+	s.SetContextUsedPct(77.3)
+	s.SetCompactRequested(true)
+	if err := s.Flush(); err != nil {
+		t.Fatalf("Flush: %v", err)
+	}
+
+	s2 := &Store{entries: make(map[string]*Entry), path: path}
+	if err := s2.load(); err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if s2.ContextUsedPct() != 77.3 {
+		t.Fatalf("want 77.3, got %f", s2.ContextUsedPct())
+	}
+	if !s2.CompactRequested() {
+		t.Fatal("compact_requested must survive flush/load")
+	}
+}

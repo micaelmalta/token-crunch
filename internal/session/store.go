@@ -33,12 +33,14 @@ type Metrics struct {
 
 // Store is the in-memory, content-addressed session store.
 type Store struct {
-	mu        sync.Mutex
-	entries   map[string]*Entry
-	toolCache map[string]*Entry
-	metrics   Metrics
-	turn      int
-	path      string
+	mu               sync.Mutex
+	entries          map[string]*Entry
+	toolCache        map[string]*Entry
+	metrics          Metrics
+	turn             int
+	path             string
+	contextUsedPct   float64
+	compactRequested bool
 }
 
 var global *Store
@@ -205,6 +207,34 @@ func (s *Store) Metrics() Metrics {
 	return s.metrics
 }
 
+// SetContextUsedPct records the context window used percentage from the most recent Stop payload.
+func (s *Store) SetContextUsedPct(pct float64) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.contextUsedPct = pct
+}
+
+// ContextUsedPct returns the context window used percentage recorded in the last Stop hook.
+func (s *Store) ContextUsedPct() float64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.contextUsedPct
+}
+
+// SetCompactRequested marks that a compaction nudge was injected this turn.
+func (s *Store) SetCompactRequested(v bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.compactRequested = v
+}
+
+// CompactRequested reports whether a compaction nudge has already been sent.
+func (s *Store) CompactRequested() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.compactRequested
+}
+
 // IncrementTurn bumps the session turn counter.
 func (s *Store) IncrementTurn() {
 	s.mu.Lock()
@@ -234,10 +264,12 @@ func (s *Store) AllEntries() []*Entry {
 }
 
 type diskFormat struct {
-	Turn      int               `json:"turn"`
-	Entries   map[string]*Entry `json:"entries"`
-	ToolCache map[string]*Entry `json:"tool_cache,omitempty"`
-	Metrics   Metrics           `json:"metrics,omitempty"`
+	Turn             int               `json:"turn"`
+	Entries          map[string]*Entry `json:"entries"`
+	ToolCache        map[string]*Entry `json:"tool_cache,omitempty"`
+	Metrics          Metrics           `json:"metrics,omitempty"`
+	ContextUsedPct   float64           `json:"context_used_pct,omitempty"`
+	CompactRequested bool              `json:"compact_requested,omitempty"`
 }
 
 // Flush atomically writes the store to its session file.
@@ -247,7 +279,7 @@ func (s *Store) Flush() error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return err
 	}
-	df := diskFormat{Turn: s.turn, Entries: s.entries, ToolCache: s.toolCache, Metrics: s.metrics}
+	df := diskFormat{Turn: s.turn, Entries: s.entries, ToolCache: s.toolCache, Metrics: s.metrics, ContextUsedPct: s.contextUsedPct, CompactRequested: s.compactRequested}
 	data, err := json.MarshalIndent(df, "", "  ")
 	if err != nil {
 		return err
@@ -291,6 +323,8 @@ func (s *Store) load() error {
 		s.toolCache = make(map[string]*Entry)
 	}
 	s.metrics = df.Metrics
+	s.contextUsedPct = df.ContextUsedPct
+	s.compactRequested = df.CompactRequested
 	return nil
 }
 
