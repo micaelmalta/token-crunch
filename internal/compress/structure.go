@@ -14,6 +14,11 @@ import (
 // toolArgs is the map of arguments passed to the tool (used for tabular column hints).
 // Returns (collapsed, wasCollapsed).
 func CollapseStructure(content string, toolArgs map[string]any) (string, bool) {
+	cfg := config.Load()
+	return collapseStructure(content, toolArgs, cfg.TokenBudget)
+}
+
+func collapseStructure(content string, toolArgs map[string]any, tokenBudget int) (string, bool) {
 	if out, ok := tryJSONArray(content); ok {
 		return out, true
 	}
@@ -53,7 +58,7 @@ func CollapseStructure(content string, toolArgs map[string]any) (string, bool) {
 	if out, ok := tryLogStream(content); ok {
 		return out, true
 	}
-	if out, ok := tryTabular(content, toolArgs); ok {
+	if out, ok := tryTabularWithBudget(content, toolArgs, tokenBudget); ok {
 		return out, true
 	}
 	if out, ok := tryYAML(content); ok {
@@ -580,11 +585,6 @@ func tryLogStream(content string) (string, bool) {
 
 var columnSepRe = regexp.MustCompile(`\s{2,}|\t`)
 
-func tryTabular(content string, toolArgs map[string]any) (string, bool) {
-	cfg := config.Load()
-	return tryTabularWithBudget(content, toolArgs, cfg.TokenBudget)
-}
-
 func tryTabularWithBudget(content string, toolArgs map[string]any, tokenBudget int) (string, bool) {
 	lines := strings.Split(strings.TrimSpace(content), "\n")
 	if len(lines) < 4 {
@@ -635,7 +635,7 @@ func tryTabularWithBudget(content string, toolArgs map[string]any, tokenBudget i
 		return "", false
 	}
 
-	var sb strings.Builder
+	resultLines := make([]string, 0, len(lines))
 	for _, l := range lines {
 		parts := columnSepRe.Split(l, -1)
 		var kept []string
@@ -644,26 +644,24 @@ func tryTabularWithBudget(content string, toolArgs map[string]any, tokenBudget i
 				kept = append(kept, p)
 			}
 		}
-		sb.WriteString(strings.Join(kept, "  "))
-		sb.WriteByte('\n')
+		resultLines = append(resultLines, strings.Join(kept, "  "))
 	}
-	result := strings.TrimRight(sb.String(), "\n")
 
 	// Row-level clipping: if the column-pruned table still exceeds the token
 	// budget, keep the header + first 3 data rows + last 2 data rows.
-	if tokenBudget > 0 && estimateTokens(result) > tokenBudget {
-		resultLines := strings.Split(result, "\n")
-		dataRows := resultLines[1:] // everything after the header
-		const head, tail = 3, 2
-		if len(dataRows) > head+tail {
+	const head, tail = 3, 2
+	if tokenBudget > 0 && len(resultLines) > 1+head+tail {
+		dataRows := resultLines[1:]
+		estimate := estimateTokens(strings.Join(resultLines, "\n"))
+		if estimate > tokenBudget {
 			clipped := append([]string{resultLines[0]}, dataRows[:head]...)
 			clipped = append(clipped, fmt.Sprintf("  … (%d rows omitted)", len(dataRows)-head-tail))
 			clipped = append(clipped, dataRows[len(dataRows)-tail:]...)
-			result = strings.Join(clipped, "\n")
+			resultLines = clipped
 		}
 	}
 
-	return result, true
+	return strings.Join(resultLines, "\n"), true
 }
 
 func leadingSpaces(s string) int {
