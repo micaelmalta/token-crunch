@@ -62,7 +62,6 @@ func UnifiedDiff(oldContent, newContent string) string {
 	newLines := strings.Split(newContent, "\n")
 	ses := shortestEditScript(oldLines, newLines)
 
-	// Build flat list of (op, text) for all ops
 	type line struct {
 		op   byte
 		text string
@@ -84,7 +83,7 @@ func UnifiedDiff(oldContent, newContent string) string {
 		}
 	}
 
-	// Mark which keep-lines are within diffContext of a change
+	// Expand a diffContext window around each changed line.
 	n := len(lines)
 	emit := make([]bool, n)
 	for i, l := range lines {
@@ -123,21 +122,20 @@ func UnifiedDiff(oldContent, newContent string) string {
 	return sb.String()
 }
 
-// maxDPCells is the maximum (m+1)*(n+1) cell count before we fall back to the
-// greedy patience diff to avoid a large heap allocation.
+// maxDPCells caps the (m+1)*(n+1) DP table to avoid large heap allocations on
+// big tool outputs; inputs above this threshold use greedyEditScript instead.
 const maxDPCells = 500_000
 
 // shortestEditScript returns a sequence of 'k' (keep), 'd' (delete), 'i' (insert)
 // operations using a simple DP edit script (not full Myers, but correct).
-// When the input pair would require more than maxDPCells cells it falls back to
+// When the input pair would exceed maxDPCells cells it falls back to
 // greedyEditScript which uses O(m+n) space at the cost of a non-optimal (but
 // valid) edit script.
 func shortestEditScript(a, b []string) []byte {
 	m, n := len(a), len(b)
-	if (m+1)*(n+1) > maxDPCells {
+	if int64(m+1)*int64(n+1) > maxDPCells {
 		return greedyEditScript(a, b)
 	}
-	// dp[i][j] = edit distance
 	dp := make([][]int, m+1)
 	for i := range dp {
 		dp[i] = make([]int, n+1)
@@ -156,7 +154,6 @@ func shortestEditScript(a, b []string) []byte {
 			}
 		}
 	}
-	// backtrack
 	ops := make([]byte, 0, m+n)
 	i, j := m, n
 	for i > 0 || j > 0 {
@@ -173,7 +170,6 @@ func shortestEditScript(a, b []string) []byte {
 			i--
 		}
 	}
-	// reverse
 	for l, r := 0, len(ops)-1; l < r; l, r = l+1, r-1 {
 		ops[l], ops[r] = ops[r], ops[l]
 	}
@@ -181,13 +177,16 @@ func shortestEditScript(a, b []string) []byte {
 }
 
 // greedyEditScript produces a valid (though not minimum) edit script in O(m+n)
-// time and space by matching lines via a hash index.  Used when the two inputs
-// are too large for the full DP table.
+// time and space by matching lines via position indices on both slices.
+// Used when the two inputs are too large for the full DP table.
 func greedyEditScript(a, b []string) []byte {
-	// Build a position index for lines in b.
-	index := make(map[string][]int, len(b))
+	indexB := make(map[string][]int, len(b))
 	for j, line := range b {
-		index[line] = append(index[line], j)
+		indexB[line] = append(indexB[line], j)
+	}
+	indexA := make(map[string][]int, len(a))
+	for i, line := range a {
+		indexA[line] = append(indexA[line], i)
 	}
 
 	ops := make([]byte, 0, len(a)+len(b))
@@ -199,34 +198,30 @@ func greedyEditScript(a, b []string) []byte {
 			j++
 			continue
 		}
-		// Look for a[i] ahead in b; or b[j] ahead in a — take whichever match
-		// is closer to avoid gratuitous deletes+inserts.
+		// Find the next position of a[i] in b (at or after j).
 		aInB := -1
-		if positions := index[a[i]]; len(positions) > 0 {
-			for _, p := range positions {
-				if p >= j {
-					aInB = p
-					break
-				}
+		for _, p := range indexB[a[i]] {
+			if p >= j {
+				aInB = p
+				break
 			}
 		}
+		// Find the next position of b[j] in a (after i).
 		bInA := -1
-		for k := i + 1; k < len(a); k++ {
-			if a[k] == b[j] {
-				bInA = k
+		for _, p := range indexA[b[j]] {
+			if p > i {
+				bInA = p
 				break
 			}
 		}
 
 		switch {
 		case aInB == -1 && bInA == -1:
-			// No future match: delete a[i], insert b[j].
 			ops = append(ops, 'd')
 			i++
 			ops = append(ops, 'i')
 			j++
 		case bInA == -1 || (aInB != -1 && (aInB-j) <= (bInA-i)):
-			// Inserting b lines up to aInB is cheaper.
 			ops = append(ops, 'i')
 			j++
 		default:

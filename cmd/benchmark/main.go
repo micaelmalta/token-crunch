@@ -4,7 +4,6 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"strings"
 
 	"github.com/micaelmalta/token-crunch/internal/compress"
@@ -289,50 +288,7 @@ func repeat(s string, n int) []string {
 	return out
 }
 
-func estimateTokens(s string) int {
-	words := strings.Fields(s)
-	if len(words) == 0 {
-		return 0
-	}
-	ratio := technicalRatio(words)
-	return int(math.Ceil(float64(len(words)) / ratio))
-}
-
-func technicalRatio(words []string) float64 {
-	const (
-		proseRatio     = 0.75
-		technicalRatio = 0.60
-		sampleMax      = 40
-	)
-	sample := words
-	if len(sample) > sampleMax {
-		sample = sample[:sampleMax]
-	}
-	technical := 0
-	for _, w := range sample {
-		if isTechnicalWord(w) {
-			technical++
-		}
-	}
-	frac := float64(technical) / float64(len(sample))
-	return proseRatio - frac*(proseRatio-technicalRatio)
-}
-
-func isTechnicalWord(w string) bool {
-	for _, c := range w {
-		switch {
-		case c == '/' || c == '\\' || c == '.':
-			return true
-		case c == ':' || c == '(' || c == ')':
-			return true
-		case 'A' <= c && c <= 'Z':
-			return true
-		case c == '_' && len(w) > 4:
-			return true
-		}
-	}
-	return false
-}
+func estimateTokens(s string) int { return compress.EstimateTokens(s) }
 
 func humanTokens(n int) string {
 	if n >= 1000 {

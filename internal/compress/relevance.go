@@ -174,11 +174,11 @@ func tokeniseWords(s string) []string {
 	})
 }
 
-// estimateTokens approximates the Claude token count for s.
+// EstimateTokens approximates the Claude token count for s.
 // Plain prose averages ~0.75 words/token.  Dense technical content (paths,
 // stack frames, symbol-heavy identifiers) tokenises more finely, so we apply a
 // lower words-per-token ratio for those to avoid under-counting.
-func estimateTokens(s string) int {
+func EstimateTokens(s string) int {
 	words := strings.Fields(s)
 	if len(words) == 0 {
 		return 0
@@ -187,10 +187,12 @@ func estimateTokens(s string) int {
 	return int(math.Ceil(float64(len(words)) / ratio))
 }
 
+func estimateTokens(s string) int { return EstimateTokens(s) }
+
 // technicalRatio returns the estimated words-per-token ratio for the token
-// slice.  A sample of words is inspected for markers that indicate dense
-// technical content (path separators, dot-chains, hex runs, camelCase symbols).
-// The ratio is interpolated between 0.60 (very dense) and 0.75 (plain prose).
+// slice.  Interpolated between 0.60 (fully technical) and 0.75 (plain prose)
+// based on the fraction of words that carry path separators, colons, parens,
+// uppercase, or long underscored identifiers.
 func technicalRatio(words []string) float64 {
 	const (
 		proseRatio     = 0.75
@@ -220,7 +222,6 @@ func isTechnicalWord(w string) bool {
 		case c == ':' || c == '(' || c == ')':
 			return true
 		case 'A' <= c && c <= 'Z':
-			// camelCase or package.Symbol pattern
 			return true
 		case c == '_' && len(w) > 4:
 			return true
