@@ -338,11 +338,13 @@ type StatsReport struct {
 }
 
 type SessionReport struct {
-	Name       string `json:"name"`
-	Entries    int    `json:"entries"`
-	ToolCache  int    `json:"tool_cache"`
-	Original   int    `json:"original"`
-	Compressed int    `json:"compressed"`
+	Name       string    `json:"name"`
+	Entries    int       `json:"entries"`
+	ToolCache  int       `json:"tool_cache"`
+	Original   int       `json:"original"`
+	Compressed int       `json:"compressed"`
+	StartedAt  time.Time `json:"started_at,omitempty"`
+	LastActive time.Time `json:"last_active,omitempty"`
 }
 
 type BucketReport struct {
@@ -393,53 +395,65 @@ func StatsText() error {
 	}
 	fmt.Printf("token-crunch stats — %d session(s), %d cached outputs\n", len(report.Sessions), totalEntries)
 	fmt.Printf("PreToolUse cache — %d hit(s), %d miss(es)\n\n", report.PreCacheHits, report.PreCacheMisses)
-	fmt.Printf("%-40s  %8s  %8s  %8s  %6s\n", "Session", "Orig", "Comp", "Saved", "Ratio")
-	fmt.Printf("%s\n", strings.Repeat("-", 80))
+
+	// measure longest session name for dynamic column width
+	nameW := len("Session")
 	for _, ss := range report.Sessions {
-		printBucket(ss.Name, ss.Original, ss.Compressed)
+		if len(ss.Name) > nameW {
+			nameW = len(ss.Name)
+		}
 	}
-	fmt.Printf("%s\n", strings.Repeat("-", 80))
-	printBucket("TOTAL", report.Total.Original, report.Total.Compressed)
+	const dtW = 17 // "2006-01-02 15:04"
+	rowW := nameW + 2 + dtW + 2 + 8 + 2 + 8 + 2 + 8 + 2 + 6
+	hdrFmt := fmt.Sprintf("%%-%ds  %%-%ds  %%8s  %%8s  %%8s  %%6s\n", nameW, dtW)
+	rowFmt := fmt.Sprintf("%%-%ds  %%-%ds  %%8s  %%8s  %%8s  %%5.1f%%%%\n", nameW, dtW)
+	fmt.Printf(hdrFmt, "Session", "Started", "Orig", "Comp", "Saved", "Ratio")
+	fmt.Println(strings.Repeat("-", rowW))
+	for _, ss := range report.Sessions {
+		dt := ""
+		if !ss.StartedAt.IsZero() {
+			dt = ss.StartedAt.Format("2006-01-02 15:04")
+		}
+		saved := ss.Original - ss.Compressed
+		ratio := 0.0
+		if ss.Original > 0 {
+			ratio = float64(saved) / float64(ss.Original) * 100
+		}
+		fmt.Printf(rowFmt, ss.Name, dt, humanBytes(ss.Original), humanBytes(ss.Compressed), humanBytes(saved), ratio)
+	}
+	fmt.Println(strings.Repeat("-", rowW))
+	// TOTAL row (no datetime)
+	saved := report.Total.Original - report.Total.Compressed
+	ratio := 0.0
+	if report.Total.Original > 0 {
+		ratio = float64(saved) / float64(report.Total.Original) * 100
+	}
+	fmt.Printf(rowFmt, "TOTAL", "", humanBytes(report.Total.Original), humanBytes(report.Total.Compressed), humanBytes(saved), ratio)
 
 	if len(report.Strategies) > 0 {
 		fmt.Println("\nBy strategy")
-		fmt.Printf("%-20s  %8s  %8s  %8s  %6s\n", "Strategy", "Orig", "Comp", "Saved", "Ratio")
-		for _, b := range report.Strategies {
-			printBucket(b.Name, b.Original, b.Compressed)
-		}
+		printBucketTable("Strategy", report.Strategies)
 	}
 	if len(report.Tools) > 0 {
 		fmt.Println("\nBy tool")
-		fmt.Printf("%-20s  %8s  %8s  %8s  %6s\n", "Tool", "Orig", "Comp", "Saved", "Ratio")
-		for _, b := range report.Tools {
-			printBucket(b.Name, b.Original, b.Compressed)
-		}
+		printBucketTable("Tool", report.Tools)
 	}
 	if len(report.TopOutputs) > 0 {
 		fmt.Println("\nTop saved outputs")
-		fmt.Printf("%-20s  %-16s  %8s  %8s\n", "Tool", "Hash", "Saved", "Turn")
-		for _, e := range report.TopOutputs {
-			fmt.Printf("%-20s  %-16s  %8s  %8d\n", e.ToolName, e.Hash, humanBytes(e.Saved), e.Turn)
-		}
+		printEntryTable(report.TopOutputs, "Saved", func(e EntryReport) string { return humanBytes(e.Saved) })
 	}
 	if len(report.TopCache) > 0 {
 		fmt.Println("\nTop pre-cache entries")
-		fmt.Printf("%-20s  %-16s  %8s  %8s\n", "Tool", "Hash", "Orig", "Turn")
-		for _, e := range report.TopCache {
-			fmt.Printf("%-20s  %-16s  %8s  %8d\n", e.ToolName, e.Hash, humanBytes(e.Original), e.Turn)
-		}
+		printEntryTable(report.TopCache, "Orig", func(e EntryReport) string { return humanBytes(e.Original) })
 	}
 	if len(report.Timeline) > 0 {
 		fmt.Println("\nTimeline (most recent)")
-		fmt.Printf("%-20s  %-16s  %-25s  %8s\n", "Tool", "Hash", "Stored", "Saved")
 		end := len(report.Timeline)
 		start := end - 10
 		if start < 0 {
 			start = 0
 		}
-		for _, e := range report.Timeline[start:end] {
-			fmt.Printf("%-20s  %-16s  %-25s  %8s\n", e.ToolName, e.Hash, e.StoredAt, humanBytes(e.Saved))
-		}
+		printTimelineTable(report.Timeline[start:end])
 	}
 	return nil
 }
@@ -472,6 +486,7 @@ func collectStats() (StatsReport, error) {
 			continue
 		}
 		var orig, comp int
+		var firstSeen, lastSeen time.Time
 		for _, e := range df.Entries {
 			orig += e.OriginalSize
 			comp += e.CompressedSize
@@ -485,9 +500,24 @@ func collectStats() (StatsReport, error) {
 			}
 			report.TopOutputs = append(report.TopOutputs, entryReport(de.Name(), e))
 			report.Timeline = append(report.Timeline, entryReport(de.Name(), e))
+			if !e.StoredAt.IsZero() {
+				if firstSeen.IsZero() || e.StoredAt.Before(firstSeen) {
+					firstSeen = e.StoredAt
+				}
+				if e.StoredAt.After(lastSeen) {
+					lastSeen = e.StoredAt
+				}
+			}
 		}
 		for _, e := range df.ToolCache {
 			report.TopCache = append(report.TopCache, entryReport(de.Name(), e))
+		}
+		// fall back to file mtime when no entry timestamps exist
+		if firstSeen.IsZero() {
+			if fi, err := de.Info(); err == nil {
+				firstSeen = fi.ModTime()
+				lastSeen = fi.ModTime()
+			}
 		}
 		report.Sessions = append(report.Sessions, SessionReport{
 			Name:       de.Name(),
@@ -495,6 +525,8 @@ func collectStats() (StatsReport, error) {
 			ToolCache:  len(df.ToolCache),
 			Original:   orig,
 			Compressed: comp,
+			StartedAt:  firstSeen,
+			LastActive: lastSeen,
 		})
 		report.Total.Original += orig
 		report.Total.Compressed += comp
@@ -504,6 +536,9 @@ func collectStats() (StatsReport, error) {
 	}
 
 	report.Total.Name = "TOTAL"
+	sort.Slice(report.Sessions, func(i, j int) bool {
+		return report.Sessions[i].StartedAt.After(report.Sessions[j].StartedAt)
+	})
 	report.Strategies = bucketSlice(byStrategy)
 	report.Tools = bucketSlice(byTool)
 	sortEntryReportsBySaved(report.TopOutputs)
@@ -542,19 +577,69 @@ func bucketSlice(m map[string]*BucketReport) []BucketReport {
 	return out
 }
 
-func printBucket(name string, orig, comp int) {
-	saved := orig - comp
-	ratio := 0.0
-	if orig > 0 {
-		ratio = float64(saved) / float64(orig) * 100
+func printBucketTable(header string, buckets []BucketReport) {
+	nameW := len(header)
+	for _, b := range buckets {
+		if len(b.Name) > nameW {
+			nameW = len(b.Name)
+		}
 	}
-	fmt.Printf("%-40s  %8s  %8s  %8s  %5.1f%%\n",
-		name,
-		humanBytes(orig),
-		humanBytes(comp),
-		humanBytes(saved),
-		ratio,
-	)
+	rowW := nameW + 2 + 8 + 2 + 8 + 2 + 8 + 2 + 6
+	hdr := fmt.Sprintf("%%-%ds  %%8s  %%8s  %%8s  %%6s\n", nameW)
+	row := fmt.Sprintf("%%-%ds  %%8s  %%8s  %%8s  %%5.1f%%%%\n", nameW)
+	fmt.Printf(hdr, header, "Orig", "Comp", "Saved", "Ratio")
+	fmt.Println(strings.Repeat("-", rowW))
+	for _, b := range buckets {
+		saved := b.Original - b.Compressed
+		ratio := 0.0
+		if b.Original > 0 {
+			ratio = float64(saved) / float64(b.Original) * 100
+		}
+		fmt.Printf(row, b.Name, humanBytes(b.Original), humanBytes(b.Compressed), humanBytes(saved), ratio)
+	}
+}
+
+func printEntryTable(entries []EntryReport, valueHeader string, value func(EntryReport) string) {
+	toolW := len("Tool")
+	hashW := len("Hash")
+	for _, e := range entries {
+		if len(e.ToolName) > toolW {
+			toolW = len(e.ToolName)
+		}
+		if len(e.Hash) > hashW {
+			hashW = len(e.Hash)
+		}
+	}
+	rowW := toolW + 2 + hashW + 2 + 8 + 2 + 5
+	hdr := fmt.Sprintf("%%-%ds  %%-%ds  %%8s  %%5s\n", toolW, hashW)
+	row := fmt.Sprintf("%%-%ds  %%-%ds  %%8s  %%5d\n", toolW, hashW)
+	fmt.Printf(hdr, "Tool", "Hash", valueHeader, "Turn")
+	fmt.Println(strings.Repeat("-", rowW))
+	for _, e := range entries {
+		fmt.Printf(row, e.ToolName, e.Hash, value(e), e.Turn)
+	}
+}
+
+func printTimelineTable(entries []EntryReport) {
+	toolW := len("Tool")
+	hashW := len("Hash")
+	for _, e := range entries {
+		if len(e.ToolName) > toolW {
+			toolW = len(e.ToolName)
+		}
+		if len(e.Hash) > hashW {
+			hashW = len(e.Hash)
+		}
+	}
+	const storedW = 25
+	rowW := toolW + 2 + hashW + 2 + storedW + 2 + 8
+	hdr := fmt.Sprintf("%%-%ds  %%-%ds  %%-%ds  %%8s\n", toolW, hashW, storedW)
+	row := fmt.Sprintf("%%-%ds  %%-%ds  %%-%ds  %%8s\n", toolW, hashW, storedW)
+	fmt.Printf(hdr, "Tool", "Hash", "Stored", "Saved")
+	fmt.Println(strings.Repeat("-", rowW))
+	for _, e := range entries {
+		fmt.Printf(row, e.ToolName, e.Hash, e.StoredAt, humanBytes(e.Saved))
+	}
 }
 
 func entryReport(session string, e *Entry) EntryReport {
