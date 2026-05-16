@@ -9,17 +9,17 @@ The core thesis: every tool call carries its own compression signal. The argumen
 ```
 Scenario                          Orig     Final     Saved   Ratio  Strategy
 ────────────────────────────────────────────────────────────────────────────────
-repeated file read (×5)             1k       147       923   86.3%  dedup
-repeated git status (×4)           316       132       184   58.2%  dedup
-JSON array (50 items)               70        18        52   74.3%  structure
-stack trace collapse                32        27         5   15.6%  structure
-file tree (>10 children)           154        27       127   82.5%  structure
-test output (40 pass, 2 fail)       240        32       208   86.7%  structure
-log stream (repeated lines)        288        36       252   87.5%  structure
-relevance trim (cat config)        12k        2k       10k   83.1%  relevance
-combined session (6 turns)         891       381       510   57.2%  dedup
+repeated file read (×5)             1k       154       971   86.3%  dedup
+repeated git status (×4)           348       150       198   56.9%  dedup
+JSON array (50 items)               87        19        68   78.2%  structure
+stack trace collapse                37        29         8   21.6%  structure
+file tree (>10 children)           165        29       136   82.4%  structure
+test output (40 pass, 2 fail)       283        48       235   83.0%  structure
+log stream (repeated lines)        310        39       271   87.4%  structure
+relevance trim (cat config)        13k        1k       12k   86.9%  relevance
+combined session (6 turns)         946       404       542   57.3%  dedup
 ────────────────────────────────────────────────────────────────────────────────
-TOTAL                              15k        2k       12k   81.2%
+TOTAL                              17k        2k       14k   84.4%
 ```
 
 Run it yourself:

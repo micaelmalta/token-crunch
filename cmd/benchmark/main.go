@@ -4,7 +4,6 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"strings"
 
 	"github.com/micaelmalta/token-crunch/internal/compress"
@@ -289,13 +288,7 @@ func repeat(s string, n int) []string {
 	return out
 }
 
-func estimateTokens(s string) int {
-	words := len(strings.Fields(s))
-	if words == 0 {
-		return 0
-	}
-	return int(math.Ceil(float64(words) / 0.75))
-}
+func estimateTokens(s string) int { return compress.EstimateTokens(s) }
 
 func humanTokens(n int) string {
 	if n >= 1000 {
