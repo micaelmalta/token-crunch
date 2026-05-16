@@ -1,6 +1,6 @@
 {
   "hookSpecificOutput": {
     "hookEventName": "PostToolUse",
-    "additionalContext": "[token-crunch: 24 → 16 tokens | structure]\n{\"id\": 1, \"name\": \"alpha\"},\n{\"id\": 2, \"name\": \"beta\"},\n…and 2 more items"
+    "additionalContext": "[token-crunch: 27 → 18 tokens | structure]\n{\"id\": 1, \"name\": \"alpha\"},\n{\"id\": 2, \"name\": \"beta\"},\n…and 2 more items"
   }
 }
