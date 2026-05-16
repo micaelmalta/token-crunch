@@ -120,3 +120,23 @@ func TestEstimateTokens_technical(t *testing.T) {
 		t.Fatalf("technical content (%d tokens) must exceed plain prose (%d tokens) for equal word count", technical, plain)
 	}
 }
+
+func TestEstimateTokens_minifiedJSON(t *testing.T) {
+	// {"id":1,"name":"alpha"} is one whitespace-word but contains many punctuation tokens.
+	// The punctuation bonus must push the estimate well above 1.
+	n := estimateTokens(`{"id":1,"name":"alpha"}`)
+	if n < 5 {
+		t.Fatalf("minified JSON must count more than 1 token, got %d", n)
+	}
+}
+
+func TestEstimateTokens_punctBonus_additive(t *testing.T) {
+	// Without the punctuation bonus, minified JSON (1 whitespace-word) would be
+	// estimated as 1-2 tokens while spaced JSON (9 words) lands at ~17 tokens —
+	// an ~8-10x gap.  The punctuation bonus must shrink that gap to within 4x.
+	spaced := estimateTokens(`{ "id" : 1 , "name" : "alpha" }`)
+	minified := estimateTokens(`{"id":1,"name":"alpha"}`)
+	if spaced > minified*4 {
+		t.Fatalf("spaced (%d) vs minified (%d) gap exceeds 4x; punctuation bonus not working", spaced, minified)
+	}
+}

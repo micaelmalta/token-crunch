@@ -2,7 +2,7 @@
   "hookSpecificOutput": {
     "hookEventName": "PostToolUse",
     "updatedToolOutput": {
-      "stdout": "[token-crunch: 27 → 18 tokens | structure]\n{\"id\": 1, \"name\": \"alpha\"},\n{\"id\": 2, \"name\": \"beta\"},\n…and 2 more items",
+      "stdout": "[token-crunch: 45 → 26 tokens | structure]\n{\"id\": 1, \"name\": \"alpha\"},\n{\"id\": 2, \"name\": \"beta\"},\n…and 2 more items",
       "stderr": "warning: slow command"
     }
   }

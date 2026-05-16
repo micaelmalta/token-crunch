@@ -416,6 +416,48 @@ database          Running   30d    0          postgres:15`
 	}
 }
 
+func TestTabular_rowClippingWhenOverBudget(t *testing.T) {
+	// Build a table with 30 data rows; each row is ~10 tokens → ~300 tokens total
+	// Set a tight budget of 50 to force row clipping.
+	var lines []string
+	lines = append(lines, "NAME              STATUS    AGE    RESTARTS")
+	for i := range 30 {
+		lines = append(lines, fmt.Sprintf("pod-%-12d  Running   %dd    %d", i, i, i))
+	}
+	content := strings.Join(lines, "\n")
+	args := map[string]any{"command": "kubectl get pods --show STATUS NAME"}
+
+	out, ok := tryTabularWithBudget(content, args, 50)
+	if !ok {
+		t.Fatal("tabular with column signal must be collapsed")
+	}
+	if !strings.Contains(out, "rows omitted") {
+		t.Fatalf("expected row-omission marker, got: %s", out)
+	}
+	outLines := strings.Split(out, "\n")
+	// header + 3 head + omission line + 2 tail = 7 lines
+	if len(outLines) != 7 {
+		t.Fatalf("expected 7 lines (header+head+omission+tail), got %d:\n%s", len(outLines), out)
+	}
+}
+
+func TestTabular_noRowClippingUnderBudget(t *testing.T) {
+	content := `NAME              STATUS    AGE    RESTARTS   IMAGE
+frontend          Running   12d    0          nginx:latest
+backend           Running   12d    2          myapp:v1
+worker            Running   3d     0          myapp:v1
+database          Running   30d    0          postgres:15`
+
+	args := map[string]any{"command": "kubectl get pods --show STATUS NAME"}
+	out, ok := tryTabularWithBudget(content, args, 10000)
+	if !ok {
+		t.Fatal("tabular with column signal must be collapsed")
+	}
+	if strings.Contains(out, "rows omitted") {
+		t.Fatal("rows must not be clipped when under budget")
+	}
+}
+
 func TestTabular_noArgSignal(t *testing.T) {
 	content := `NAME    STATUS    AGE    RESTARTS
 a       Running   1d     0
