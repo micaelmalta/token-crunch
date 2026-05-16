@@ -9,10 +9,15 @@ import (
 )
 
 type flushInput struct {
-	SessionID string `json:"session_id"`
+	SessionID     string         `json:"session_id"`
+	ContextWindow *contextWindow `json:"context_window"`
 }
 
-// Flush handles the Stop hook — persists the session store to disk.
+type contextWindow struct {
+	UsedPercentage float64 `json:"used_percentage"`
+}
+
+// Flush handles the Stop hook — records context window usage, persists the session store to disk.
 func Flush() error {
 	raw, err := io.ReadAll(os.Stdin)
 	if err != nil {
@@ -26,5 +31,11 @@ func Flush() error {
 	session.Init(inp.SessionID)
 	store := session.Global()
 	store.IncrementTurn()
+	if inp.ContextWindow != nil {
+		store.SetContextUsedPct(inp.ContextWindow.UsedPercentage)
+		debugf("flush context_window_used=%.1f%%", inp.ContextWindow.UsedPercentage)
+	}
+	// reset compaction flag each turn so it can re-trigger if usage stays high
+	store.SetCompactRequested(false)
 	return store.Flush()
 }

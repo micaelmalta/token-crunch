@@ -18,6 +18,8 @@ type Config struct {
 	StoreRaw          bool
 	Debug             bool
 	Denylist          []string
+	CompactThreshold  float64
+	CompactMessage    string
 }
 
 func Load() Config {
@@ -32,6 +34,8 @@ func Load() Config {
 		StoreRaw:          envBool("TOKEN_CRUNCH_STORE_RAW", true),
 		Debug:             envBool("TOKEN_CRUNCH_DEBUG", false),
 		Denylist:          envList("TOKEN_CRUNCH_DENYLIST", nil),
+		CompactThreshold:  envFloat("TOKEN_CRUNCH_COMPACT_THRESHOLD", 75),
+		CompactMessage:    envString("TOKEN_CRUNCH_COMPACT_MESSAGE", ""),
 	}
 	if path := strings.TrimSpace(os.Getenv("TOKEN_CRUNCH_CONFIG")); path != "" {
 		cfg = applyConfigFile(cfg, path)
@@ -69,6 +73,8 @@ type fileConfig struct {
 	StoreRaw          *bool    `json:"store_raw"`
 	Debug             *bool    `json:"debug"`
 	Denylist          []string `json:"denylist"`
+	CompactThreshold  *float64 `json:"compact_threshold"`
+	CompactMessage    *string  `json:"compact_message"`
 }
 
 func applyConfigFile(cfg Config, path string) Config {
@@ -113,6 +119,12 @@ func applyConfigFile(cfg Config, path string) Config {
 	if len(fc.Denylist) > 0 {
 		cfg.Denylist = fc.Denylist
 	}
+	if fc.CompactThreshold != nil {
+		cfg.CompactThreshold = *fc.CompactThreshold
+	}
+	if fc.CompactMessage != nil {
+		cfg.CompactMessage = *fc.CompactMessage
+	}
 	return cfg
 }
 
@@ -146,6 +158,12 @@ func applyEnvOverrides(cfg Config) Config {
 	}
 	if os.Getenv("TOKEN_CRUNCH_DENYLIST") != "" {
 		cfg.Denylist = envList("TOKEN_CRUNCH_DENYLIST", cfg.Denylist)
+	}
+	if os.Getenv("TOKEN_CRUNCH_COMPACT_THRESHOLD") != "" {
+		cfg.CompactThreshold = envFloat("TOKEN_CRUNCH_COMPACT_THRESHOLD", cfg.CompactThreshold)
+	}
+	if os.Getenv("TOKEN_CRUNCH_COMPACT_MESSAGE") != "" {
+		cfg.CompactMessage = envString("TOKEN_CRUNCH_COMPACT_MESSAGE", cfg.CompactMessage)
 	}
 	return cfg
 }
@@ -208,6 +226,14 @@ func envFloat(name string, def float64) float64 {
 		return def
 	}
 	return n
+}
+
+func envString(name string, def string) string {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return def
+	}
+	return raw
 }
 
 func envBool(name string, def bool) bool {
