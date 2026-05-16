@@ -31,7 +31,7 @@ go run ./cmd/benchmark
 ## Install
 
 ```bash
-go install github.com/mmalta/token-crunch/cmd/token-crunch@latest
+go install github.com/micaelmalta/token-crunch/cmd/token-crunch@latest
 token-crunch install
 ```
 
@@ -215,7 +215,7 @@ scripts/
 
 ## Composability
 
-token-crunch complements [context-broker](https://github.com/mmalta/context-broker):
+token-crunch complements [context-broker](https://github.com/micaelmalta/context-broker):
 
 | Project | Saves tokens on | Mechanism |
 |---|---|---|

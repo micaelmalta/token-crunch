@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mmalta/token-crunch/internal/config"
-	"github.com/mmalta/token-crunch/internal/session"
+	"github.com/micaelmalta/token-crunch/internal/config"
+	"github.com/micaelmalta/token-crunch/internal/session"
 )
 
 // Result holds the output of the compression pipeline.

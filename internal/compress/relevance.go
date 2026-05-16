@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mmalta/token-crunch/internal/config"
+	"github.com/micaelmalta/token-crunch/internal/config"
 )
 
 // DefaultTokenBudget is the max token estimate before relevance trimming kicks in.

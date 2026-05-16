@@ -7,8 +7,8 @@ import (
 	"math"
 	"strings"
 
-	"github.com/mmalta/token-crunch/internal/compress"
-	"github.com/mmalta/token-crunch/internal/session"
+	"github.com/micaelmalta/token-crunch/internal/compress"
+	"github.com/micaelmalta/token-crunch/internal/session"
 )
 
 // case_ is a single benchmark scenario.
@@ -144,15 +144,15 @@ func stackTraceOutput() case_ {
 	content := `goroutine 1 [running]:
 runtime/debug.Stack()
 	/usr/local/go/src/runtime/debug/stack.go:24 +0x5b
-github.com/mmalta/token-crunch/internal/compress.Run(...)
+github.com/micaelmalta/token-crunch/internal/compress.Run(...)
 	/home/user/token-crunch/internal/compress/pipeline.go:42 +0x1a3
-github.com/mmalta/token-crunch/internal/compress.Dedup(...)
+github.com/micaelmalta/token-crunch/internal/compress.Dedup(...)
 	/home/user/token-crunch/internal/compress/dedup.go:15 +0x88
-github.com/mmalta/token-crunch/internal/compress.findNearMatch(...)
+github.com/micaelmalta/token-crunch/internal/compress.findNearMatch(...)
 	/home/user/token-crunch/internal/compress/dedup.go:34 +0x62
-github.com/mmalta/token-crunch/internal/session.(*Store).AllEntries(...)
+github.com/micaelmalta/token-crunch/internal/session.(*Store).AllEntries(...)
 	/home/user/token-crunch/internal/session/store.go:124 +0x77
-github.com/mmalta/token-crunch/internal/session.(*Store).Put(...)
+github.com/micaelmalta/token-crunch/internal/session.(*Store).Put(...)
 	/home/user/token-crunch/internal/session/store.go:93 +0x4f
 main.main()
 	/home/user/token-crunch/cmd/token-crunch/main.go:18 +0x2c`
@@ -192,7 +192,7 @@ func testOutputPassFail() case_ {
 	lines = append(lines, "    auth_test.go:88: expected 200, got 401")
 	lines = append(lines, "--- FAIL: TestRateLimit (0.03s)")
 	lines = append(lines, "    rate_test.go:44: expected header X-RateLimit-Remaining")
-	lines = append(lines, "FAIL\tgithub.com/mmalta/token-crunch\t0.45s")
+	lines = append(lines, "FAIL\tgithub.com/micaelmalta/token-crunch\t0.45s")
 	content := strings.Join(lines, "\n")
 	return case_{
 		name:      "test output (40 pass, 2 fail)",

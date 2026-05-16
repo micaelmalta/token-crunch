@@ -5,7 +5,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/mmalta/token-crunch/internal/session"
+	"github.com/micaelmalta/token-crunch/internal/session"
 )
 
 type preInput struct {

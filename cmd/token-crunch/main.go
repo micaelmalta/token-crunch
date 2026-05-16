@@ -6,10 +6,10 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/mmalta/token-crunch/internal/config"
-	"github.com/mmalta/token-crunch/internal/hook"
-	"github.com/mmalta/token-crunch/internal/install"
-	"github.com/mmalta/token-crunch/internal/session"
+	"github.com/micaelmalta/token-crunch/internal/config"
+	"github.com/micaelmalta/token-crunch/internal/hook"
+	"github.com/micaelmalta/token-crunch/internal/install"
+	"github.com/micaelmalta/token-crunch/internal/session"
 )
 
 const version = "0.1.0"

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mmalta/token-crunch/internal/session"
+	"github.com/micaelmalta/token-crunch/internal/session"
 )
 
 func TestDedup_empty(t *testing.T) {

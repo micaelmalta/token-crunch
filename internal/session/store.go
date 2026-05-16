@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mmalta/token-crunch/internal/config"
+	"github.com/micaelmalta/token-crunch/internal/config"
 )
 
 // Entry records a single cached tool output in the session store.

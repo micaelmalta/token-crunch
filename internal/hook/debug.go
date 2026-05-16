@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mmalta/token-crunch/internal/config"
+	"github.com/micaelmalta/token-crunch/internal/config"
 )
 
 func debugf(format string, args ...any) {

@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mmalta/token-crunch/internal/compress"
-	"github.com/mmalta/token-crunch/internal/session"
+	"github.com/micaelmalta/token-crunch/internal/compress"
+	"github.com/micaelmalta/token-crunch/internal/session"
 )
 
 type ExplainReport struct {
