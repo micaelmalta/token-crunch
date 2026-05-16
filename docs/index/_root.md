@@ -1,7 +1,22 @@
-# LOI Index
+# token-crunch — Campus Map
 
-Generated: 2026-05-15 (updated)
-Source paths: cmd/, internal/
+Context-aware token compression for Claude Code. Intercepts tool outputs via Claude hooks (PreToolUse / PostToolUse / Stop), compresses them in-process, and persists savings across turns using a content-addressed session store.
+
+## Buildings
+
+| Directory | Owns |
+|:----------|:-----|
+| [compress/](compress/_root.md) | Three-strategy compression pipeline: differential dedup, structural collapse, TF-IDF relevance trim |
+| [session/](session/_root.md) | Content-addressed in-memory + disk session store; LCS-based diff ratio and unified diff |
+| [hook/](hook/_root.md) | Claude hook entrypoints (pre/post/flush), auto-compact nudge, explain and replay diagnostics |
+| [entrypoints.md](entrypoints.md) | CLI main, savings benchmark, runtime config, settings.json installer |
+
+## Key flows
+
+- **Compression path:** `hook/post.go` → `compress/pipeline.go` → dedup / structure / relevance → `session/store.go`
+- **Cache-hit path:** `hook/pre.go` looks up tool-input hash in session store → injects cached result via `additionalContext`
+- **Persistence:** `hook/flush.go` (Stop hook) increments turn, records context-window usage, flushes store to `~/.local/share/token-crunch/`
+- **Install:** `internal/install/install.go` merges hooks into `~/.claude/settings.json` non-destructively
 
 ## TASK → LOAD
 
@@ -11,7 +26,7 @@ Source paths: cmd/, internal/
 | Add a new output format / shape detector | compress/core.md |
 | Debug dedup false positives or near-match behavior | compress/core.md |
 | Tune TF-IDF relevance scoring or token budget | compress/core.md |
-| Configure runtime thresholds or enabled strategies | compress/core.md |
+| Configure runtime thresholds or enabled strategies | entrypoints.md |
 | Capture live Claude hook payloads for fixtures | hook/hooks.md |
 | Understand the Claude Code hook lifecycle | hook/_root.md |
 | Debug why a specific tool output is not being compressed | hook/hooks.md |
@@ -42,16 +57,4 @@ Source paths: cmd/, internal/
 | Singleton global store | session/store.md |
 | Idempotent merge | entrypoints.md |
 | Benchmark harness / fixture-driven | entrypoints.md |
-
-## GOVERNANCE WATCHLIST
-
-No rooms flagged.
-
-## Buildings
-
-| Subdomain | Description | Rooms |
-|-----------|-------------|-------|
-| compress/ | Three-stage token compression: dedup, structural collapse, relevance trimming | core.md |
-| hook/ | Claude Code PreToolUse / PostToolUse / Stop hook handlers and session replay | hooks.md |
-| session/ | Content-addressed session store with cross-process persistence and diff utilities | store.md |
-| (flat) | CLI entrypoints and settings installer | entrypoints.md |
+| Auto-compact nudge injection | hook/hooks.md |
