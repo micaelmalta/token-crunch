@@ -3,7 +3,7 @@ package compress
 import (
 	"fmt"
 
-	"github.com/mmalta/token-crunch/internal/session"
+	"github.com/micaelmalta/token-crunch/internal/session"
 )
 
 // Dedup applies differential deduplication against the session store.

@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mmalta/token-crunch/internal/config"
-	"github.com/mmalta/token-crunch/internal/session"
+	"github.com/micaelmalta/token-crunch/internal/config"
+	"github.com/micaelmalta/token-crunch/internal/session"
 )
 
 func TestPipeline_errorPassthrough(t *testing.T) {
