@@ -45,11 +45,12 @@ Three Claude Code hooks, one session store:
 
 ```
 PreToolUse  ──► cache hit? inject stored result as context
+            ──► context usage ≥ threshold? inject compaction nudge
 PostToolUse ──► compress output → replace tool output → store in session cache
-Stop        ──► increment turn counter → flush session store
+Stop        ──► record context_window.used_percentage → increment turn counter → flush session store
 ```
 
-State lives in `~/.local/share/token-crunch/session-<id>.json` — one file per Claude Code session, derived from `CLAUDE_SESSION_ID`. No daemon, no sidecar. Each hook invocation is a fresh process that loads and writes the store file. `PostToolUse` flushes after each successful output so the next hook process can reuse it; `Stop` advances the turn counter and flushes again.
+State lives in `~/.local/share/token-crunch/session-<id>.json` — one file per Claude Code session, derived from `CLAUDE_SESSION_ID`. No daemon, no sidecar. Each hook invocation is a fresh process that loads and writes the store file. `PostToolUse` flushes after each successful output so the next hook process can reuse it; `Stop` records the current context window usage percentage and flushes again.
 
 Every compressed output gets a one-line header so the model knows what happened:
 
@@ -193,9 +194,10 @@ internal/
     structure.go  strategy 2: shape detectors (JSON/NDJSON/CSV/YAML/TOML/diff/diagnostics/coverage/packages/markup/tree/test/log/table)
     relevance.go  strategy 3: TF-IDF line scorer against tool arguments
   hook/
-    pre.go        PreToolUse wiring + cache-hit context injection
+    pre.go        PreToolUse wiring + cache-hit context injection + auto-compact nudge
     post.go       PostToolUse wiring + updatedToolOutput replacement
-    flush.go      Stop hook — increments turn, flushes store
+    flush.go      Stop hook — records context usage, increments turn, flushes store
+    compact.go    auto-compaction threshold check and nudge injection
     explain.go    explain command for compression decisions
     replay.go     replay command for threshold tuning
   config/
