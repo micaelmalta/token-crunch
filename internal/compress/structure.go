@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/micaelmalta/token-crunch/internal/config"
 )
 
 // CollapseStructure detects output shape and applies structure-specific reduction.
@@ -579,6 +581,11 @@ func tryLogStream(content string) (string, bool) {
 var columnSepRe = regexp.MustCompile(`\s{2,}|\t`)
 
 func tryTabular(content string, toolArgs map[string]any) (string, bool) {
+	cfg := config.Load()
+	return tryTabularWithBudget(content, toolArgs, cfg.TokenBudget)
+}
+
+func tryTabularWithBudget(content string, toolArgs map[string]any, tokenBudget int) (string, bool) {
 	lines := strings.Split(strings.TrimSpace(content), "\n")
 	if len(lines) < 4 {
 		return "", false
@@ -640,7 +647,23 @@ func tryTabular(content string, toolArgs map[string]any) (string, bool) {
 		sb.WriteString(strings.Join(kept, "  "))
 		sb.WriteByte('\n')
 	}
-	return strings.TrimRight(sb.String(), "\n"), true
+	result := strings.TrimRight(sb.String(), "\n")
+
+	// Row-level clipping: if the column-pruned table still exceeds the token
+	// budget, keep the header + first 3 data rows + last 2 data rows.
+	if tokenBudget > 0 && estimateTokens(result) > tokenBudget {
+		resultLines := strings.Split(result, "\n")
+		dataRows := resultLines[1:] // everything after the header
+		const head, tail = 3, 2
+		if len(dataRows) > head+tail {
+			clipped := append([]string{resultLines[0]}, dataRows[:head]...)
+			clipped = append(clipped, fmt.Sprintf("  … (%d rows omitted)", len(dataRows)-head-tail))
+			clipped = append(clipped, dataRows[len(dataRows)-tail:]...)
+			result = strings.Join(clipped, "\n")
+		}
+	}
+
+	return result, true
 }
 
 func leadingSpaces(s string) int {

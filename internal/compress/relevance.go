@@ -178,13 +178,33 @@ func tokeniseWords(s string) []string {
 // Plain prose averages ~0.75 words/token.  Dense technical content (paths,
 // stack frames, symbol-heavy identifiers) tokenises more finely, so we apply a
 // lower words-per-token ratio for those to avoid under-counting.
+// JSON/code punctuation characters that are whitespace-joined into a single
+// "word" (e.g. `{"id":1}`) are counted as additional standalone tokens.
 func EstimateTokens(s string) int {
 	words := strings.Fields(s)
 	if len(words) == 0 {
 		return 0
 	}
 	ratio := technicalRatio(words)
-	return int(math.Ceil(float64(len(words)) / ratio))
+	base := int(math.Ceil(float64(len(words)) / ratio))
+	return base + countPuncTokens(s)
+}
+
+// countPuncTokens counts punctuation characters that the tokeniser treats as
+// individual tokens but strings.Fields folds into adjacent words.
+// Each occurrence of { } [ ] adds 1; each : , ; ( ) adds 0.5 (rounded up
+// for the whole string) because they appear inside words half the time.
+func countPuncTokens(s string) int {
+	heavy, light := 0, 0
+	for _, c := range s {
+		switch c {
+		case '{', '}', '[', ']':
+			heavy++
+		case ':', ',', ';', '(', ')':
+			light++
+		}
+	}
+	return heavy + (light+1)/2
 }
 
 func estimateTokens(s string) int { return EstimateTokens(s) }
