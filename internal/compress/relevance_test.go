@@ -105,9 +105,18 @@ func TestEstimateTokens_empty(t *testing.T) {
 }
 
 func TestEstimateTokens_words(t *testing.T) {
-	// 3 words → ceil(3/0.75) = 4
+	// 3 plain words → no technical markers → ratio 0.75 → ceil(3/0.75) = 4
 	n := estimateTokens("one two three")
 	if n != 4 {
-		t.Fatalf("want 4 tokens for 3 words, got %d", n)
+		t.Fatalf("want 4 tokens for 3 plain words, got %d", n)
+	}
+}
+
+func TestEstimateTokens_technical(t *testing.T) {
+	// Same number of words; technical markers push ratio below 0.75 → more tokens.
+	plain := estimateTokens("one two three")      // 3 words, ratio 0.75 → 4 tokens
+	technical := estimateTokens("runtime/debug.Stack() pipeline.go:42 internal/compress.Run(...)")
+	if technical <= plain {
+		t.Fatalf("technical content (%d tokens) must exceed plain prose (%d tokens) for equal word count", technical, plain)
 	}
 }

@@ -174,13 +174,59 @@ func tokeniseWords(s string) []string {
 	})
 }
 
-// estimateTokens approximates token count as words/0.75 (rough GPT tokeniser heuristic).
+// estimateTokens approximates the Claude token count for s.
+// Plain prose averages ~0.75 words/token.  Dense technical content (paths,
+// stack frames, symbol-heavy identifiers) tokenises more finely, so we apply a
+// lower words-per-token ratio for those to avoid under-counting.
 func estimateTokens(s string) int {
-	words := len(strings.Fields(s))
-	if words == 0 {
+	words := strings.Fields(s)
+	if len(words) == 0 {
 		return 0
 	}
-	return int(math.Ceil(float64(words) / 0.75))
+	ratio := technicalRatio(words)
+	return int(math.Ceil(float64(len(words)) / ratio))
+}
+
+// technicalRatio returns the estimated words-per-token ratio for the token
+// slice.  A sample of words is inspected for markers that indicate dense
+// technical content (path separators, dot-chains, hex runs, camelCase symbols).
+// The ratio is interpolated between 0.60 (very dense) and 0.75 (plain prose).
+func technicalRatio(words []string) float64 {
+	const (
+		proseRatio     = 0.75
+		technicalRatio = 0.60
+		sampleMax      = 40
+	)
+	sample := words
+	if len(sample) > sampleMax {
+		sample = sample[:sampleMax]
+	}
+	technical := 0
+	for _, w := range sample {
+		if isTechnicalWord(w) {
+			technical++
+		}
+	}
+	frac := float64(technical) / float64(len(sample))
+	return proseRatio - frac*(proseRatio-technicalRatio)
+}
+
+// isTechnicalWord reports whether w looks like a dense technical token.
+func isTechnicalWord(w string) bool {
+	for _, c := range w {
+		switch {
+		case c == '/' || c == '\\' || c == '.':
+			return true
+		case c == ':' || c == '(' || c == ')':
+			return true
+		case 'A' <= c && c <= 'Z':
+			// camelCase or package.Symbol pattern
+			return true
+		case c == '_' && len(w) > 4:
+			return true
+		}
+	}
+	return false
 }
 
 func indent(line string) int {

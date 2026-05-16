@@ -290,11 +290,48 @@ func repeat(s string, n int) []string {
 }
 
 func estimateTokens(s string) int {
-	words := len(strings.Fields(s))
-	if words == 0 {
+	words := strings.Fields(s)
+	if len(words) == 0 {
 		return 0
 	}
-	return int(math.Ceil(float64(words) / 0.75))
+	ratio := technicalRatio(words)
+	return int(math.Ceil(float64(len(words)) / ratio))
+}
+
+func technicalRatio(words []string) float64 {
+	const (
+		proseRatio     = 0.75
+		technicalRatio = 0.60
+		sampleMax      = 40
+	)
+	sample := words
+	if len(sample) > sampleMax {
+		sample = sample[:sampleMax]
+	}
+	technical := 0
+	for _, w := range sample {
+		if isTechnicalWord(w) {
+			technical++
+		}
+	}
+	frac := float64(technical) / float64(len(sample))
+	return proseRatio - frac*(proseRatio-technicalRatio)
+}
+
+func isTechnicalWord(w string) bool {
+	for _, c := range w {
+		switch {
+		case c == '/' || c == '\\' || c == '.':
+			return true
+		case c == ':' || c == '(' || c == ')':
+			return true
+		case 'A' <= c && c <= 'Z':
+			return true
+		case c == '_' && len(w) > 4:
+			return true
+		}
+	}
+	return false
 }
 
 func humanTokens(n int) string {
