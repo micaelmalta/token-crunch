@@ -189,6 +189,26 @@ func TestUninstall_missingFile(t *testing.T) {
 	}
 }
 
+func TestUninstall_emptyEventTypeIsRemoved(t *testing.T) {
+	// After removing the only hook in an event type, the key must not remain
+	// as a null value in the JSON output.
+	path := settingsFile(t, "")
+	if err := Install(false); err != nil {
+		t.Fatal(err)
+	}
+	if err := Uninstall(false); err != nil {
+		t.Fatal(err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(data, []byte("null")) {
+		t.Errorf("output must not contain null values for emptied event types, got:\n%s", data)
+	}
+}
+
 func TestInstall_preservesUnknownFieldsOnExistingEntries(t *testing.T) {
 	// Entries may carry extra fields like "if" that our schema doesn't know about.
 	// Install must not drop them when it appends its own entry to the same event type.

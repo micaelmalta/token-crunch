@@ -105,6 +105,11 @@ func loadHooksMap(top map[string]json.RawMessage) map[string]json.RawMessage {
 }
 
 func storeHooksMap(top map[string]json.RawMessage, hooks map[string]json.RawMessage) error {
+	for k, v := range hooks {
+		if len(v) == 0 {
+			delete(hooks, k)
+		}
+	}
 	raw, err := marshalNoEscape(hooks)
 	if err != nil {
 		return err
