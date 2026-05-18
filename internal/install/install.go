@@ -162,18 +162,26 @@ func removeHookRaw(existing json.RawMessage, cmd string) json.RawMessage {
 			// Entry untouched — preserve original bytes exactly.
 			out = append(out, re)
 		} else if len(keep) > 0 {
-			// Some hooks remain — must rewrite this entry, accepting the field loss tradeoff
-			// (only our own entries ever reach this path since we only remove token-crunch commands).
-			var full hookEntry
-			_ = json.Unmarshal(re, &full)
-			var filtered []hookCommand
-			for _, h := range full.Hooks {
-				if h.Command != cmd {
-					filtered = append(filtered, h)
+			// Some hooks remain — rewrite using map[string]json.RawMessage so all
+			// unknown fields on the entry object are preserved.
+			var entryMap map[string]json.RawMessage
+			if err := json.Unmarshal(re, &entryMap); err != nil {
+				out = append(out, re) // unparseable — keep as-is
+				continue
+			}
+			var hooksRaw []json.RawMessage
+			_ = json.Unmarshal(entryMap["hooks"], &hooksRaw)
+			var filteredRaw []json.RawMessage
+			for _, hr := range hooksRaw {
+				var hc hookCommand
+				_ = json.Unmarshal(hr, &hc)
+				if hc.Command != cmd {
+					filteredRaw = append(filteredRaw, hr)
 				}
 			}
-			full.Hooks = filtered
-			rewritten, _ := marshalNoEscape(full)
+			filteredJSON, _ := marshalNoEscape(filteredRaw)
+			entryMap["hooks"] = filteredJSON
+			rewritten, _ := marshalNoEscape(entryMap)
 			out = append(out, rewritten)
 		}
 		// len(keep) == 0: drop the entry entirely
