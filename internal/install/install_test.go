@@ -1,6 +1,7 @@
 package install
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -23,7 +24,7 @@ func settingsFile(t *testing.T, content string) string {
 	return path
 }
 
-func readHooks(t *testing.T, path string) hooksSection {
+func readHooks(t *testing.T, path string) map[string][]hookEntry {
 	t.Helper()
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -33,10 +34,18 @@ func readHooks(t *testing.T, path string) hooksSection {
 	if err := json.Unmarshal(data, &top); err != nil {
 		t.Fatalf("parse settings: %v", err)
 	}
-	var hooks hooksSection
+	hooks := map[string][]hookEntry{}
 	if raw, ok := top["hooks"]; ok {
-		if err := json.Unmarshal(raw, &hooks); err != nil {
+		var hooksRaw map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &hooksRaw); err != nil {
 			t.Fatalf("parse hooks: %v", err)
+		}
+		for k, v := range hooksRaw {
+			var entries []hookEntry
+			if err := json.Unmarshal(v, &entries); err != nil {
+				t.Fatalf("parse hook entries for %s: %v", k, err)
+			}
+			hooks[k] = entries
 		}
 	}
 	return hooks
@@ -61,13 +70,13 @@ func TestInstall_writesAllThreeHooks(t *testing.T) {
 	}
 
 	hooks := readHooks(t, path)
-	if !hasCommand(hooks.PreToolUse, "token-crunch pre") {
+	if !hasCommand(hooks["PreToolUse"], "token-crunch pre") {
 		t.Error("PreToolUse hook missing")
 	}
-	if !hasCommand(hooks.PostToolUse, "token-crunch post") {
+	if !hasCommand(hooks["PostToolUse"], "token-crunch post") {
 		t.Error("PostToolUse hook missing")
 	}
-	if !hasCommand(hooks.Stop, "token-crunch flush") {
+	if !hasCommand(hooks["Stop"], "token-crunch flush") {
 		t.Error("Stop hook missing")
 	}
 }
@@ -84,7 +93,7 @@ func TestInstall_idempotent(t *testing.T) {
 
 	hooks := readHooks(t, claudeSettingsPath(false))
 	count := 0
-	for _, e := range hooks.PostToolUse {
+	for _, e := range hooks["PostToolUse"] {
 		for _, h := range e.Hooks {
 			if h.Command == "token-crunch post" {
 				count++
@@ -112,10 +121,10 @@ func TestInstall_preservesExistingHooks(t *testing.T) {
 	}
 
 	hooks := readHooks(t, path)
-	if !hasCommand(hooks.PostToolUse, "my-other-hook") {
+	if !hasCommand(hooks["PostToolUse"], "my-other-hook") {
 		t.Error("existing hook must be preserved after install")
 	}
-	if !hasCommand(hooks.PostToolUse, "token-crunch post") {
+	if !hasCommand(hooks["PostToolUse"], "token-crunch post") {
 		t.Error("new hook must be added alongside existing")
 	}
 
@@ -141,13 +150,13 @@ func TestUninstall_removesHooks(t *testing.T) {
 	}
 
 	hooks := readHooks(t, path)
-	if hasCommand(hooks.PreToolUse, "token-crunch pre") {
+	if hasCommand(hooks["PreToolUse"], "token-crunch pre") {
 		t.Error("pre hook must be removed")
 	}
-	if hasCommand(hooks.PostToolUse, "token-crunch post") {
+	if hasCommand(hooks["PostToolUse"], "token-crunch post") {
 		t.Error("post hook must be removed")
 	}
-	if hasCommand(hooks.Stop, "token-crunch flush") {
+	if hasCommand(hooks["Stop"], "token-crunch flush") {
 		t.Error("flush hook must be removed")
 	}
 }
@@ -164,10 +173,10 @@ func TestUninstall_preservesOtherHooks(t *testing.T) {
 	}
 
 	hooks := readHooks(t, path)
-	if !hasCommand(hooks.PostToolUse, "keep-me") {
+	if !hasCommand(hooks["PostToolUse"], "keep-me") {
 		t.Error("unrelated hook must survive uninstall")
 	}
-	if hasCommand(hooks.PostToolUse, "token-crunch post") {
+	if hasCommand(hooks["PostToolUse"], "token-crunch post") {
 		t.Error("token-crunch hook must be removed")
 	}
 }
@@ -177,6 +186,75 @@ func TestUninstall_missingFile(t *testing.T) {
 	// Uninstall on a non-existent settings file must not error
 	if err := Uninstall(false); err != nil {
 		t.Fatalf("Uninstall on missing file must not error: %v", err)
+	}
+}
+
+func TestInstall_preservesUnknownFieldsOnExistingEntries(t *testing.T) {
+	// Entries may carry extra fields like "if" that our schema doesn't know about.
+	// Install must not drop them when it appends its own entry to the same event type.
+	existing := `{"hooks":{"PreToolUse":[{"if":"Bash(git worktree add *)","matcher":".*","hooks":[{"type":"command","command":"my-guard"}]}]}}`
+	path := settingsFile(t, existing)
+
+	if err := Install(false); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(data, []byte(`"if"`)) {
+		t.Error(`existing "if" field must be preserved after install`)
+	}
+	if !bytes.Contains(data, []byte(`"my-guard"`)) {
+		t.Error("existing hook command must be preserved after install")
+	}
+	hooks := readHooks(t, path)
+	if !hasCommand(hooks["PreToolUse"], "token-crunch pre") {
+		t.Error("new token-crunch pre hook must be added")
+	}
+}
+
+func TestInstall_preservesUnknownEventTypes(t *testing.T) {
+	existing := `{
+		"hooks": {
+			"Notification":      [{"hooks": [{"type": "command", "command": "notify-me"}]}],
+			"UserPromptSubmit":  [{"hooks": [{"type": "command", "command": "on-submit"}]}],
+			"WorktreeCreate":    [{"hooks": [{"type": "command", "command": "on-worktree"}]}]
+		}
+	}`
+	path := settingsFile(t, existing)
+
+	if err := Install(false); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	hooks := readHooks(t, path)
+	if !hasCommand(hooks["Notification"], "notify-me") {
+		t.Error("Notification hook must be preserved")
+	}
+	if !hasCommand(hooks["UserPromptSubmit"], "on-submit") {
+		t.Error("UserPromptSubmit hook must be preserved")
+	}
+	if !hasCommand(hooks["WorktreeCreate"], "on-worktree") {
+		t.Error("WorktreeCreate hook must be preserved")
+	}
+}
+
+func TestInstall_noHTMLEscaping(t *testing.T) {
+	existing := `{"hooks":{"PreToolUse":[{"matcher":".*","hooks":[{"type":"command","command":"echo a >> /tmp/log"}]}]}}`
+	path := settingsFile(t, existing)
+
+	if err := Install(false); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(data, []byte("\\u003e")) {
+		t.Error("output must not contain Unicode-escaped '>' (\\u003e) characters")
 	}
 }
 
@@ -208,13 +286,13 @@ func TestInstall_local_writesProjectSettings(t *testing.T) {
 
 	localPath := filepath.Join(dir, localSettingsPath)
 	hooks := readHooks(t, localPath)
-	if !hasCommand(hooks.PreToolUse, "token-crunch pre") {
+	if !hasCommand(hooks["PreToolUse"], "token-crunch pre") {
 		t.Error("PreToolUse hook missing in local settings")
 	}
-	if !hasCommand(hooks.PostToolUse, "token-crunch post") {
+	if !hasCommand(hooks["PostToolUse"], "token-crunch post") {
 		t.Error("PostToolUse hook missing in local settings")
 	}
-	if !hasCommand(hooks.Stop, "token-crunch flush") {
+	if !hasCommand(hooks["Stop"], "token-crunch flush") {
 		t.Error("Stop hook missing in local settings")
 	}
 
@@ -243,13 +321,13 @@ func TestUninstall_local_removesProjectSettings(t *testing.T) {
 	}
 
 	hooks := readHooks(t, localPath)
-	if hasCommand(hooks.PreToolUse, "token-crunch pre") {
+	if hasCommand(hooks["PreToolUse"], "token-crunch pre") {
 		t.Error("pre hook must be removed from local settings")
 	}
-	if hasCommand(hooks.PostToolUse, "token-crunch post") {
+	if hasCommand(hooks["PostToolUse"], "token-crunch post") {
 		t.Error("post hook must be removed from local settings")
 	}
-	if hasCommand(hooks.Stop, "token-crunch flush") {
+	if hasCommand(hooks["Stop"], "token-crunch flush") {
 		t.Error("flush hook must be removed from local settings")
 	}
 }
