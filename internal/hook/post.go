@@ -251,10 +251,25 @@ func postWithStore(store *session.Store, inp postInput, w io.Writer, persist boo
 	if cfg.Denies(inp.ToolName) || cfg.Denies(fmt.Sprintf("%v", inp.ToolInput)) {
 		cfg.StoreRaw = false
 	}
+
+	// If the pre-hook already injected this result via additionalContext (cache hit),
+	// we still run the compression pipeline to update the cache efficiently and
+	// populate the global dedup store, but we skip emitting the modified output
+	// to the orchestrator to avoid the "[unchanged]" message.
+	cacheKey := buildCacheKey(inp.ToolName, inp.ToolInput)
+	preCacheHit := store.GetToolCache(session.Hash(cacheKey)) != nil
+
 	result := compress.RunWithConfig(store, inp.ToolName, inp.ToolInput, content, cfg)
 	debugf("post tool=%s modified=%t strategies=%s orig=%d final=%d", inp.ToolName, result.WasModified, strings.Join(result.Strategies, "+"), result.OrigSize, result.FinalSize)
-	cacheKey := buildCacheKey(inp.ToolName, inp.ToolInput)
 	store.PutToolCacheWithRaw(cacheKey, inp.ToolName, result.Output, result.OrigSize, cfg.StoreRaw)
+
+	if preCacheHit {
+		debugf("post tool=%s skipping output modification (pre-cache hit)", inp.ToolName)
+		if persist {
+			_ = store.Flush()
+		}
+		return nil
+	}
 
 	// Persist store after every post call so the next invocation can dedup against it.
 	// (Each hook call is a fresh process — state only survives via disk.)
