@@ -148,60 +148,21 @@ func TestIsError_invalid_json(t *testing.T) {
 
 // ── runPost (I/O-decoupled helper) ───────────────────────────────────────────
 
-// runPost exercises the Post logic with injected stdin/stdout.
-func runPost(t *testing.T, _ *session.Store, inputJSON string) string {
+// runPost exercises the Post logic with an isolated ephemeral store (no disk I/O).
+func runPost(t *testing.T, store *session.Store, inputJSON string) string {
 	t.Helper()
 
-	// Capture stdout via a pipe
-	origStdout := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("pipe: %v", err)
-	}
-	os.Stdout = w
-
-	// Feed stdin
-	origStdin := os.Stdin
-	sr, sw, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("stdin pipe: %v", err)
-	}
-	os.Stdin = sr
-	if _, err := sw.WriteString(inputJSON); err != nil {
-		t.Fatalf("write stdin: %v", err)
-	}
-	if err := sw.Close(); err != nil {
-		t.Fatalf("close stdin writer: %v", err)
+	var inp postInput
+	if err := json.Unmarshal([]byte(inputJSON), &inp); err != nil {
+		// invalid JSON — still run through postWithStore so error handling is tested
+		inp = postInput{}
 	}
 
-	postErr := Post()
-
-	if err := w.Close(); err != nil {
-		t.Fatalf("close stdout writer: %v", err)
+	var buf strings.Builder
+	if postErr := postWithStore(store, inp, &buf, false); postErr != nil {
+		t.Fatalf("postWithStore() error: %v", postErr)
 	}
-	os.Stdout = origStdout
-	os.Stdin = origStdin
-	if err := sr.Close(); err != nil {
-		t.Fatalf("close stdin reader: %v", err)
-	}
-
-	if postErr != nil {
-		t.Fatalf("Post() error: %v", postErr)
-	}
-
-	var sb strings.Builder
-	buf := make([]byte, 4096)
-	for {
-		n, _ := r.Read(buf)
-		if n == 0 {
-			break
-		}
-		sb.Write(buf[:n])
-	}
-	if err := r.Close(); err != nil {
-		t.Fatalf("close stdout reader: %v", err)
-	}
-	return sb.String()
+	return buf.String()
 }
 
 func TestPost_emptyContent(t *testing.T) {

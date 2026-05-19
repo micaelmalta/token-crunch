@@ -251,9 +251,22 @@ func postWithStore(store *session.Store, inp postInput, w io.Writer, persist boo
 	if cfg.Denies(inp.ToolName) || cfg.Denies(fmt.Sprintf("%v", inp.ToolInput)) {
 		cfg.StoreRaw = false
 	}
+
+	// If the pre-hook already injected this result via additionalContext (cache hit),
+	// skip dedup compression so the tool output isn't replaced with "[unchanged]".
+	// The content was already delivered; we still refresh the cache entry and persist.
+	cacheKey := buildCacheKey(inp.ToolName, inp.ToolInput)
+	if store.GetToolCache(session.Hash(cacheKey)) != nil {
+		debugf("post tool=%s skipping compression (pre-cache hit)", inp.ToolName)
+		store.PutToolCacheWithRaw(cacheKey, inp.ToolName, content, len(content), cfg.StoreRaw)
+		if persist {
+			_ = store.Flush()
+		}
+		return nil
+	}
+
 	result := compress.RunWithConfig(store, inp.ToolName, inp.ToolInput, content, cfg)
 	debugf("post tool=%s modified=%t strategies=%s orig=%d final=%d", inp.ToolName, result.WasModified, strings.Join(result.Strategies, "+"), result.OrigSize, result.FinalSize)
-	cacheKey := buildCacheKey(inp.ToolName, inp.ToolInput)
 	store.PutToolCacheWithRaw(cacheKey, inp.ToolName, result.Output, result.OrigSize, cfg.StoreRaw)
 
 	// Persist store after every post call so the next invocation can dedup against it.
